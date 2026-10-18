@@ -95,14 +95,15 @@
       0.225
     ]
   },
-  "cccd_preprocessing": "Training used grayscale page and crop for CCCD. Browser runs RGB first; if initial class is CCCD, it reruns segmentation and classification on grayscale page/crop.",
+  "cccd_preprocessing": "This web package preserves RGB for all predictions and does not apply grayscale conversion. Training used grayscale for CCCD, so inference preprocessing intentionally differs for this speed/input test.",
   "browser_pipeline": [
-    "letterbox full page to 256x256; RGB ImageNet normalization",
-    "run roi_segmenter.onnx",
-    "threshold mask at 0.45 and map its bounding rectangle from letterbox coordinates to original image",
-    "crop original page at predicted rectangle and letterbox to 224x224",
-    "run roi_classifier.onnx and softmax the nine logits",
-    "if initial class is cccd, grayscale full page and crop and rerun segmenter and classifier"
+    "EXIF-oriented source image letterboxed on white to 256x256 while retaining RGB",
+    "normalize RGB channels with ImageNet mean/std",
+    "run roi_segmenter.onnx and return mask_logits with shape [1,1,256,256]",
+    "apply sigmoid threshold 0.45; map predicted ROI rectangle to original source coordinates with margins",
+    "crop original RGB image and letterbox to 224x224",
+    "run roi_classifier.onnx and return class_logits with shape [1,9]; softmax for class probabilities",
+    "no grayscale transformation is applied in browser inference"
   ],
   "runtime": {
     "library": "ONNX Runtime Web",
