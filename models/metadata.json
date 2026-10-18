@@ -36,7 +36,6 @@
   },
   "rejection": "Prototype similarities can rank similarity to known documents. A reliable unknown/non-document rejection threshold needs dog/cat and other negative samples.",
   "validation": {
-    "run_dir": "D:\\ProjectKHMT\\modelhocba\\runs\\roi_all_classes_clean_gray_cccd_embedding",
     "best_epoch": 15,
     "epochs_completed": 23,
     "elapsed_seconds": 1059.6,
