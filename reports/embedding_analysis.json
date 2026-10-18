@@ -1,0 +1,51 @@
+{
+  "embedding_dimensions": 576,
+  "metric": "cosine similarity",
+  "prototype_source": "normalized mean of train split ROI embeddings",
+  "splits": {
+    "val": {
+      "count": 130,
+      "nearest_prototype_cosine_quantiles": {
+        "0.01": 0.5504670739173889,
+        "0.05": 0.6415857076644897,
+        "0.1": 0.6978593468666077,
+        "0.5": 0.9570189714431763
+      },
+      "nearest_train_example_cosine_quantiles": {
+        "0.01": 0.638419508934021,
+        "0.05": 0.7299513220787048,
+        "0.1": 0.8150335550308228,
+        "0.5": 0.9778968691825867
+      },
+      "prototype_label_accuracy": 0.9153846153846154
+    },
+    "test": {
+      "count": 130,
+      "nearest_prototype_cosine_quantiles": {
+        "0.01": 0.6415472030639648,
+        "0.05": 0.6686204671859741,
+        "0.1": 0.7446393966674805,
+        "0.5": 0.955293595790863
+      },
+      "nearest_train_example_cosine_quantiles": {
+        "0.01": 0.6982329487800598,
+        "0.05": 0.7881763577461243,
+        "0.1": 0.819038450717926,
+        "0.5": 0.9785506129264832
+      },
+      "prototype_label_accuracy": 0.9
+    }
+  },
+  "classes": [
+    "bangtotnghiep",
+    "cccd",
+    "dtut",
+    "gxn",
+    "hocba10",
+    "hocba11",
+    "hocba12",
+    "hocbabia",
+    "vsat"
+  ],
+  "rejection_threshold_status": "provisional; validation contains documents only; no dog/cat/non-document negatives"
+}

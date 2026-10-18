@@ -4,7 +4,7 @@
   const LABELS = ['Bằng tốt nghiệp','CCCD','ĐTUT','GXN','Học bạ 10','Học bạ 11','Học bạ 12','Học bạ bìa','VSAT'];
   const MEAN = [0.485,0.456,0.406], STD = [0.229,0.224,0.225];
   const $ = id => document.getElementById(id);
-  const state = {files:[], segmenter:null, classifier:null, rows:[], urls:[], busy:false, modelLoadMs:0};
+  const state = {files:[], segmenter:null, classifier:null, prototypes:null, rows:[], urls:[], busy:false, modelLoadMs:0};
   const status = message => { $('runStatus').textContent=message; };
 
   async function init(){
@@ -13,11 +13,12 @@
       if(!window.ort) throw new Error('Không tải được ONNX Runtime.');
       ort.env.wasm.wasmPaths={mjs:new URL('vendor/ort-wasm-simd-threaded.mjs',document.baseURI).href,wasm:new URL('vendor/ort-wasm-simd-threaded.wasm',document.baseURI).href};
       ort.env.wasm.numThreads=1; ort.env.wasm.proxy=false;
-      const [segmenter,classifier]=await Promise.all([
+      const [segmenter,classifier,prototypes]=await Promise.all([
         ort.InferenceSession.create('models/roi_segmenter.onnx',{executionProviders:['wasm'],graphOptimizationLevel:'all'}),
-        ort.InferenceSession.create('models/roi_classifier.onnx',{executionProviders:['wasm'],graphOptimizationLevel:'all'})
+        ort.InferenceSession.create('models/roi_classifier.onnx',{executionProviders:['wasm'],graphOptimizationLevel:'all'}),
+        fetch('models/prototypes.json').then(response=>{if(!response.ok)throw new Error('Không tải được prototypes.json');return response.json();})
       ]);
-      state.segmenter=segmenter; state.classifier=classifier; state.modelLoadMs=performance.now()-started;
+      state.segmenter=segmenter; state.classifier=classifier; state.prototypes=prototypes; state.modelLoadMs=performance.now()-started;
       $('modelStatus').textContent=`Sẵn sàng · tải ${state.modelLoadMs.toFixed(0)} ms`;
       $('runButton').disabled=state.files.length===0;
       status('Chọn ảnh hoặc thư mục.');
@@ -51,6 +52,10 @@
     }
     return new ort.Tensor('float32',values,[1,3,canvas.height,canvas.width]);
   }
+  function grayscaleCanvas(source){
+    const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
+    const ctx=canvas.getContext('2d');ctx.filter='grayscale(1)';ctx.drawImage(source,0,0);ctx.filter='none';return canvas;
+  }
   function findBox(maskData,bitmap,lb){
     let minX=256,minY=256,maxX=-1,maxY=-1,count=0;
     for(let y=0;y<256;y++)for(let x=0;x<256;x++)if(1/(1+Math.exp(-maskData[y*256+x]))>=0.45){minX=Math.min(minX,x);minY=Math.min(minY,y);maxX=Math.max(maxX,x);maxY=Math.max(maxY,y);count++;}
@@ -63,6 +68,11 @@
     return{x:sx,y:sy,w:Math.max(1,ex-sx),h:Math.max(1,ey-sy),fallback:false,maskBox:[x0,y0,x1,y1],activePixels:count};
   }
   function softmax(logits){let max=-Infinity;for(const x of logits)max=Math.max(max,x);const e=Array.from(logits,x=>Math.exp(x-max)),sum=e.reduce((a,b)=>a+b,0);return e.map(x=>x/sum);}
+  function prototypeCosines(embedding){
+    const norm=Math.sqrt(embedding.reduce((sum,x)=>sum+x*x,0))||1;
+    const normalized=embedding.map(x=>x/norm);
+    return state.prototypes.embeddings.map((prototype,i)=>({label:state.prototypes.classes[i],cosine:prototype.reduce((sum,x,j)=>sum+x*normalized[j],0)}));
+  }
   function tensorStats(values){let min=Infinity,max=-Infinity,sum=0;for(const value of values){min=Math.min(min,value);max=Math.max(max,value);sum+=value;}return{count:values.length,min,max,mean:sum/values.length};}
   function overlayUrl(pageCanvas,maskData,box){
     const canvas=document.createElement('canvas');canvas.width=canvas.height=256;const ctx=canvas.getContext('2d');ctx.drawImage(pageCanvas,0,0);
@@ -75,14 +85,28 @@
   async function predict(file){
     const started=performance.now(),bitmap=await loadBitmap(file);
     try{
-      const page=letterboxCanvas(bitmap,256);
-      const maskOut=await state.segmenter.run({page:tensorFromCanvas(page.canvas)});
-      const mask=maskOut.mask_logits.data,box=findBox(mask,bitmap,page),maskStats=tensorStats(mask);
-      const crop=letterboxCanvas(bitmap,224,[box.x,box.y,box.w,box.h]);
-      const classifierOut=await state.classifier.run({roi:tensorFromCanvas(crop.canvas)});
-      const logits=Array.from(classifierOut.class_logits.data),probabilities=softmax(logits);
-      const predicted=probabilities.indexOf(Math.max(...probabilities));
-      return{file,name:file.webkitRelativePath||file.name,trueLabel:labelFromPath(file.webkitRelativePath||file.name),predicted:CLASSES[predicted],confidence:probabilities[predicted],probabilities,logits,maskLogits:Array.from(mask),maskStats,box,ms:performance.now()-started,overlay:overlayUrl(page.canvas,mask,box),roiImage:crop.canvas.toDataURL('image/jpeg',0.92),error:''};
+      let page=letterboxCanvas(bitmap,256);
+      let maskOut=await state.segmenter.run({page:tensorFromCanvas(page.canvas)});
+      let mask=maskOut.mask_logits.data,box=findBox(mask,bitmap,page);
+      let crop=letterboxCanvas(bitmap,224,[box.x,box.y,box.w,box.h]);
+      let classifierOut=await state.classifier.run({roi:tensorFromCanvas(crop.canvas)});
+      let logits=Array.from(classifierOut.class_logits.data),probabilities=softmax(logits);
+      let predicted=probabilities.indexOf(Math.max(...probabilities)),cccdGrayPass=false;
+      if(CLASSES[predicted]==='cccd'){
+        cccdGrayPass=true;
+        const grayBitmap=grayscaleCanvas(bitmap);
+        page=letterboxCanvas(grayBitmap,256);
+        maskOut=await state.segmenter.run({page:tensorFromCanvas(page.canvas)});
+        mask=maskOut.mask_logits.data;box=findBox(mask,bitmap,page);
+        crop=letterboxCanvas(grayBitmap,224,[box.x,box.y,box.w,box.h]);
+        classifierOut=await state.classifier.run({roi:tensorFromCanvas(crop.canvas)});
+        logits=Array.from(classifierOut.class_logits.data);probabilities=softmax(logits);
+        predicted=probabilities.indexOf(Math.max(...probabilities));
+      }
+      const embedding=Array.from(classifierOut.embedding.data),cosines=prototypeCosines(embedding);
+      const nearestPrototype=cosines.reduce((a,b)=>b.cosine>a.cosine?b:a,cosines[0]);
+      const maskStats=tensorStats(mask);
+      return{file,name:file.webkitRelativePath||file.name,trueLabel:labelFromPath(file.webkitRelativePath||file.name),predicted:CLASSES[predicted],confidence:probabilities[predicted],probabilities,logits,embedding,cosines,nearestPrototype,cccdGrayPass,maskLogits:Array.from(mask),maskStats,box,ms:performance.now()-started,overlay:overlayUrl(letterboxCanvas(bitmap,256).canvas,mask,box),roiImage:crop.canvas.toDataURL('image/jpeg',0.92),error:''};
     }finally{bitmap.close();}
   }
   function labelFromPath(path){const parts=path.replaceAll('\\','/').split('/').map(x=>x.toLowerCase());for(let i=parts.length-1;i>=0;i--){const found=CLASSES.indexOf(parts[i]);if(found>=0)return CLASSES[found];}return'';}
@@ -90,12 +114,12 @@
 
   function renderScores(row){
     const table=document.createElement('table');table.className='score-table';
-    const head=document.createElement('tr');for(const name of ['ID','Lớp','Logit','Softmax']){const th=document.createElement('th');th.textContent=name;head.append(th);}table.append(head);
-    CLASSES.forEach((name,i)=>{const tr=document.createElement('tr');if(name===row.predicted)tr.className='selected';for(const value of [i,LABELS[i],fmt(row.logits[i]),pct(row.probabilities[i])]){const td=document.createElement('td');td.textContent=value;tr.append(td);}table.append(tr);});return table;
+    const head=document.createElement('tr');for(const name of ['ID','Lớp','Logit','Softmax','Cosine prototype']){const th=document.createElement('th');th.textContent=name;head.append(th);}table.append(head);
+    CLASSES.forEach((name,i)=>{const tr=document.createElement('tr');if(name===row.predicted)tr.className='selected';const cosine=row.cosines.find(item=>item.label===name)?.cosine??0;for(const value of [i,LABELS[i],fmt(row.logits[i]),pct(row.probabilities[i]),cosine.toFixed(4)]){const td=document.createElement('td');td.textContent=value;tr.append(td);}table.append(tr);});return table;
   }
   function addPreview(parent,title,src){const box=document.createElement('div');box.className='preview-block';const label=document.createElement('div');label.className='preview-title';label.textContent=title;const img=document.createElement('img');img.src=src;img.alt=title;box.append(label,img);parent.append(box);}
   function downloadTensor(row){
-    const payload={file:row.name,model_outputs:{roi_segmenter:{name:'mask_logits',shape:[1,1,256,256],statistics:row.maskStats,threshold:0.45,active_pixels:row.box.activePixels,raw_values:row.maskLogits},roi_classifier:{name:'class_logits',shape:[1,9],classes:CLASSES.map((name,i)=>({id:i,name,logit:row.logits[i],softmax:row.probabilities[i]}))}},roi_xywh_original:[row.box.x,row.box.y,row.box.w,row.box.h],inference_ms:row.ms};
+    const payload={file:row.name,model_outputs:{roi_segmenter:{name:'mask_logits',shape:[1,1,256,256],statistics:row.maskStats,threshold:0.45,active_pixels:row.box.activePixels,raw_values:row.maskLogits},roi_classifier:{name:'class_logits',shape:[1,9],classes:CLASSES.map((name,i)=>({id:i,name,logit:row.logits[i],softmax:row.probabilities[i]})),embedding:{name:'embedding',shape:[1,row.embedding.length],dimensions:row.embedding.length,raw_values:row.embedding},prototype_cosine:{metric:'cosine',scores:row.cosines,nearest:row.nearestPrototype}},preprocessing:{cccd_grayscale_pass:row.cccdGrayPass},roi_xywh_original:[row.box.x,row.box.y,row.box.w,row.box.h],inference_ms:row.ms};
     const blob=new Blob([JSON.stringify(payload)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${row.file.name.replace(/\.[^.]+$/,'')}_onnx_output.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function drawResults(){
@@ -112,7 +136,7 @@
       if(row.trueLabel){const badge=document.createElement('span');badge.className='badge';badge.textContent=`Nhãn thật: ${LABELS[CLASSES.indexOf(row.trueLabel)]}`;details.append(badge);}
       if(row.error){const error=document.createElement('div');error.className='sub';error.textContent=row.error;details.append(error);}else{
         const stats=document.createElement('div');stats.className='tensor-stats';
-        stats.innerHTML=`<b>Thời gian:</b> ${row.ms.toFixed(2)} ms<br><b>Mask output:</b> [1,1,256,256] · logit min ${fmt(row.maskStats.min)} · max ${fmt(row.maskStats.max)} · mean ${fmt(row.maskStats.mean)}<br><b>Pixel mask ≥ 0.45:</b> ${row.box.activePixels}/65,536<br><b>ROI ảnh gốc (x,y,w,h):</b> ${row.box.x.toFixed(1)}, ${row.box.y.toFixed(1)}, ${row.box.w.toFixed(1)}, ${row.box.h.toFixed(1)}${row.box.fallback?' · fallback toàn ảnh':''}<br><b>Classifier output:</b> [1,9] logits + softmax`;
+        stats.innerHTML=`<b>Thời gian:</b> ${row.ms.toFixed(2)} ms<br><b>Mask output:</b> [1,1,256,256] · logit min ${fmt(row.maskStats.min)} · max ${fmt(row.maskStats.max)} · mean ${fmt(row.maskStats.mean)}<br><b>Pixel mask ≥ 0.45:</b> ${row.box.activePixels}/65,536<br><b>ROI ảnh gốc (x,y,w,h):</b> ${row.box.x.toFixed(1)}, ${row.box.y.toFixed(1)}, ${row.box.w.toFixed(1)}, ${row.box.h.toFixed(1)}${row.box.fallback?' · fallback toàn ảnh':''}<br><b>Classifier output:</b> [1,9] logits + softmax<br><b>Embedding:</b> ${row.embedding.length} chiều · cosine gần nhất ${row.nearestPrototype.label}: ${row.nearestPrototype.cosine.toFixed(4)}${row.cccdGrayPass?' · đã chạy lượt CCCD grayscale':''}`;
         details.append(stats,renderScores(row));const dl=document.createElement('button');dl.className='download-output';dl.textContent='Tải toàn bộ tensor output JSON';dl.addEventListener('click',()=>downloadTensor(row));details.append(dl);
       }
       card.append(details);container.append(card);
