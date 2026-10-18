@@ -34,7 +34,15 @@
     },
     "embedding_prototypes": "prototypes.json; normalized 576D class means; compare with cosine similarity"
   },
-  "rejection": "Prototype similarities can rank similarity to known documents. A reliable unknown/non-document rejection threshold needs dog/cat and other negative samples.",
+  "rejection": {
+    "rule": "reject if top softmax confidence OR maximum prototype cosine is below its threshold",
+    "suggested_thresholds": {
+      "confidence": 0.65,
+      "cosine": 0.64,
+      "basis": "1st percentile validation confidence and 5th percentile validation prototype cosine; validation contains documents only"
+    },
+    "caveat": "Suggested values use document-only validation data; calibrate with non-document negatives before relying on unknown rejection."
+  },
   "validation": {
     "best_epoch": 15,
     "epochs_completed": 23,

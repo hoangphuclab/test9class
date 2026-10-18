@@ -10,9 +10,11 @@
 ## Use
 
 - Select one image or a folder, then run prediction.
+- Adjust **Confidence tối thiểu** and **Cosine prototype tối thiểu** on the page. The result changes immediately when either threshold moves.
+- An image is accepted only if both scores meet their thresholds. Otherwise it is marked **TỪ CHỐI** and counted in the reject column of the confusion matrix.
+- Starting thresholds are confidence `0.65` and cosine `0.64`, derived from low percentiles of validation document images. They are editable starting points, not calibrated dog/cat rejection limits.
 - Folder names matching a class are used as labels for accuracy and the confusion matrix.
-- Each result shows the predicted class, confidence, ROI, timing, all class probabilities, 576D embedding, and cosine similarity to each class prototype.
-- The JSON output download includes raw mask logits, classifier logits, embedding, and prototype cosine scores.
+- The JSON output includes raw mask logits, classifier logits, the 576D embedding, per-class cosine scores, thresholds, and the accept/reject decision. CSV includes candidate, decision, confidence, and nearest prototype.
 
 ## Model outputs
 
@@ -22,21 +24,13 @@ This is one trained MobileNetV3-Small + U-Net model exported as two ONNX graph f
 - `models/roi_classifier.onnx`: input `roi [1,3,224,224]`; outputs `class_logits [1,9]` and `embedding [1,576]`.
 - `models/prototypes.json`: normalized mean embedding for each training class. Compare output embeddings with these using cosine similarity.
 
-The page runs the RGB pipeline first. If its first prediction is `cccd`, it reruns segmentation and classification after converting the page and ROI to grayscale and replicating gray into three channels. Other labels remain RGB. CCCD training, validation, and test samples also use grayscale; there is no thresholding/binarization.
+The page runs RGB first. If its first prediction is `cccd`, it reruns segmentation and classification after converting page and ROI to grayscale. CCCD training, validation, and test samples also use grayscale; there is no binarization.
 
-Class IDs:
+## Threshold behavior and limitation
 
-| ID | Label |
-|---:|---|
-| 0 | `bangtotnghiep` |
-| 1 | `cccd` |
-| 2 | `dtut` |
-| 3 | `gxn` |
-| 4 | `hocba10` |
-| 5 | `hocba11` |
-| 6 | `hocba12` |
-| 7 | `hocbabia` |
-| 8 | `vsat` |
+The UI rejects an image if either `max softmax confidence < confidence threshold` **or** `maximum cosine to the 9 document prototypes < cosine threshold`. You can tune both sliders against a folder with known labels and inspect the rejection column of the confusion matrix.
+
+The current training data contains only the nine document classes, with no dog/cat or other non-document negatives. Therefore the default cutoffs can reject low-scoring inputs, but cannot guarantee that an arbitrary non-document will be rejected; some may still score highly on both measures. Add representative negative images and calibrate on a separate validation set before relying on this as an unknown detector.
 
 ## Training snapshot
 
@@ -44,7 +38,5 @@ Class IDs:
 - Best checkpoint: epoch 15, MobileNetV3-Small + U-Net, 2,285,682 parameters.
 - Test set: 130 images; pipeline accuracy 90.77%, paired-crop accuracy 98.46%, mask IoU 76.48%.
 - Full training curves, per-class metrics, confusion matrices, predictions, and embedding/cosine analysis are in `reports/`.
-
-Cosine values rank similarity to the nine known document prototypes. The dataset has no dog/cat or other non-document negatives, so these values are not a calibrated unknown-document rejection test. Include representative non-document samples and calibrate a threshold before relying on automatic rejection.
 
 The web app runs ONNX Runtime Web and WebAssembly locally in the browser. It does not send selected images to a server and does not require Python for deployment.
