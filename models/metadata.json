@@ -1,0 +1,122 @@
+{
+  "name": "MobileNetV3-Small U-Net ROI, 9 l?p gi?y t?",
+  "architecture": "mobilenet_v3_small_unet_roi_9class",
+  "checkpoint_epoch": 27,
+  "best_score": 0.8362308106599031,
+  "classes": [
+    {
+      "id": 0,
+      "name": "bangtotnghiep"
+    },
+    {
+      "id": 1,
+      "name": "cccd"
+    },
+    {
+      "id": 2,
+      "name": "dtut"
+    },
+    {
+      "id": 3,
+      "name": "gxn"
+    },
+    {
+      "id": 4,
+      "name": "hocba10"
+    },
+    {
+      "id": 5,
+      "name": "hocba11"
+    },
+    {
+      "id": 6,
+      "name": "hocba12"
+    },
+    {
+      "id": 7,
+      "name": "hocbabia"
+    },
+    {
+      "id": 8,
+      "name": "vsat"
+    }
+  ],
+  "inputs": {
+    "page": {
+      "shape": [
+        "N",
+        3,
+        256,
+        256
+      ],
+      "color": "RGB",
+      "resize": "letterbox white"
+    },
+    "roi": {
+      "shape": [
+        "N",
+        3,
+        224,
+        224
+      ],
+      "color": "RGB",
+      "resize": "letterbox white"
+    }
+  },
+  "outputs": {
+    "roi_segmenter.onnx": {
+      "name": "mask_logits",
+      "shape": [
+        "N",
+        1,
+        256,
+        256
+      ],
+      "postprocess": "sigmoid >= 0.45, bounding rectangle + 4% horizontal and 8% vertical margins"
+    },
+    "roi_classifier.onnx": {
+      "name": "class_logits",
+      "shape": [
+        "N",
+        9
+      ],
+      "postprocess": "softmax; argmax maps by classes[].id"
+    }
+  },
+  "normalization": {
+    "mean": [
+      0.485,
+      0.456,
+      0.406
+    ],
+    "std": [
+      0.229,
+      0.224,
+      0.225
+    ]
+  },
+  "cccd_preprocessing": "Training used grayscale page and crop for CCCD. Browser runs RGB first; if initial class is CCCD, it reruns segmentation and classification on grayscale page/crop.",
+  "browser_pipeline": [
+    "letterbox full page to 256x256; RGB ImageNet normalization",
+    "run roi_segmenter.onnx",
+    "threshold mask at 0.45 and map its bounding rectangle from letterbox coordinates to original image",
+    "crop original page at predicted rectangle and letterbox to 224x224",
+    "run roi_classifier.onnx and softmax the nine logits",
+    "if initial class is cccd, grayscale full page and crop and rerun segmenter and classifier"
+  ],
+  "runtime": {
+    "library": "ONNX Runtime Web",
+    "version": "1.22.0",
+    "execution_provider": "wasm",
+    "threads": 1,
+    "assets_local": true
+  },
+  "training_run": "modelhocba/runs/roi_all_classes_small_gray",
+  "validation_best_epoch": 27,
+  "validation_metrics": {
+    "pipeline_accuracy": 0.837037037037037,
+    "paired_roi_accuracy": 0.9333333333333333,
+    "mask_iou": 0.7126355347809968
+  },
+  "notes": "Static inference handoff. The training run was stopped at epoch 28; best checkpoint from epoch 27 is packaged. Test split was not run for this checkpoint."
+}

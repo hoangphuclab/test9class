@@ -1,0 +1,9 @@
+﻿Third-party components
+
+ONNX Runtime Web 1.22.0 (Microsoft)
+License: MIT
+Source: https://github.com/microsoft/onnxruntime
+The distributed browser runtime files are in vendor/.
+
+The trained classifier is based on torchvision MobileNetV3-Small ImageNet initialization.
+Torchvision is distributed under BSD-3-Clause: https://github.com/pytorch/vision/blob/main/LICENSE

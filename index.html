@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f4f7f5">
+  <title>Kiểm tra mô hình ROI giấy tờ</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div><span class="eyebrow">ONNX · CHẠY TRÊN TRÌNH DUYỆT</span><h1>Kiểm tra giấy tờ</h1></div>
+      <span id="modelStatus" class="status">Chưa tải mô hình</span>
+    </header>
+
+    <section class="card controls">
+      <label class="upload"><span>Chọn ảnh</span><input id="singleInput" type="file" accept="image/*"></label>
+      <label class="upload"><span>Chọn thư mục</span><input id="folderInput" type="file" accept="image/*" webkitdirectory multiple></label>
+      <button id="runButton" class="primary" disabled>Chạy nhận diện</button>
+      <button id="exportButton" disabled>Xuất CSV</button>
+      <div class="progress-wrap"><div id="progressBar"></div></div>
+      <div id="runStatus" class="run-status">Đang khởi tạo model ONNX…</div>
+    </section>
+
+    <section id="summary" class="summary-grid" hidden></section>
+
+    <section class="card result-card">
+      <div class="section-head"><h2>Kết quả</h2><span id="resultCount">Chưa có ảnh</span></div>
+      <div id="results" class="results-grid"><div class="empty">Chọn một ảnh hoặc thư mục để bắt đầu.</div></div>
+    </section>
+
+    <section id="matrixCard" class="card" hidden>
+      <div class="section-head"><h2>Ma trận nhầm lẫn</h2><span id="matrixAccuracy"></span></div>
+      <div class="matrix-scroll"><table id="matrixTable"></table></div>
+      <p class="note">Nhãn thật được lấy từ tên thư mục lớp nằm trong đường dẫn ảnh. Nếu không tìm thấy tên lớp, ảnh không được tính vào ma trận.</p>
+    </section>
+    <footer>Inference chạy cục bộ trong trình duyệt bằng ONNX Runtime Web. Ảnh không được tải lên máy chủ.</footer>
+  </main>
+  <script src="vendor/ort.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
