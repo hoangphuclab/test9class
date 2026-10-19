@@ -1,7 +1,7 @@
 {
   "architecture": "MobileNetV3-Small shared encoder + U-Net ROI segmentation + 9-class classification",
-  "checkpoint": "best_model.pth (training artifact; not required by the static web app)",
-  "best_epoch": 17,
+  "checkpoint": "best_model.pth (training-run source; not included in the browser package)",
+  "best_epoch": 8,
   "classes": {
     "0": "bangtotnghiep",
     "1": "cccd",
@@ -14,9 +14,11 @@
     "8": "vsat"
   },
   "preprocessing": {
-    "page": "RGB ImageNet-normalized, letterbox 256x256",
-    "roi": "RGB ImageNet-normalized, letterbox 224x224",
-      "cccd": "For folder samples with true-label path cccd, run segmentation/classification from grayscale page and ROI replicated to RGB tensor. For an unlabeled single image, a manual grayscale option is available; otherwise rerun in grayscale if the preliminary RGB prediction is CCCD. No thresholding."
+    "page": "Grayscale, replicated to RGB and ImageNet-normalized, letterbox 256x256",
+    "roi": "Grayscale, replicated to RGB and ImageNet-normalized, letterbox 224x224",
+    "all_labels": "Every image is converted to grayscale before page segmentation and ROI classification.",
+    "binarization": "none",
+    "grayscale": true
   },
   "outputs": {
     "segmenter": {
@@ -37,23 +39,24 @@
   "rejection": {
     "rule": "reject if top softmax confidence OR maximum prototype cosine is below its threshold",
     "suggested_thresholds": {
-      "confidence": 0.6,
-      "cosine": 0.64,
-      "basis": "1st percentile validation confidence and 5th percentile validation prototype cosine; validation contains documents only"
+      "confidence": 0.39,
+      "cosine": 0.39,
+      "basis": "User-selected defaults below 0.40; not calibrated against non-document negatives."
     },
-    "caveat": "Suggested values use document-only validation data; calibrate with non-document negatives before relying on unknown rejection."
+    "caveat": "Lower thresholds make acceptance easier. Validation contains document images only, so these defaults do not establish reliable rejection of non-documents.",
+    "basis": "Both default rejection thresholds are 0.39 and adjustable."
   },
   "validation": {
-    "best_epoch": 17,
-    "epochs_completed": 25,
-    "elapsed_seconds": 1249.1,
+    "best_epoch": 8,
+    "epochs_completed": 18,
+    "elapsed_seconds": 592.1,
     "device": "NVIDIA GeForce RTX 3070 Ti Laptop GPU",
     "parameters": 2285682,
-    "best_validation_score": 0.9254361063017882,
-    "test_count": 133,
-    "test_pipeline_accuracy": 0.9398496240601504,
-    "test_paired_roi_accuracy": 1.0,
-    "test_mask_iou": 0.7809080898313594,
+    "best_validation_score": 0.8598104067523071,
+    "test_count": 198,
+    "test_pipeline_accuracy": 0.9242424242424242,
+    "test_paired_roi_accuracy": 0.9949494949494949,
+    "test_mask_iou": 0.6389663797436338,
     "classes": [
       "bangtotnghiep",
       "cccd",
@@ -64,7 +67,9 @@
       "hocba12",
       "hocbabia",
       "vsat"
-    ]
+    ],
+    "initialized_from": "D:\\ProjectKHMT\\modelhocba\\runs\\roi_all_classes_grayscale_hbfit_v3\\best_model.pth",
+    "lr_scheduler": "plateau"
   },
   "model_files": [
     "roi_segmenter.onnx",

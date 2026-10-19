@@ -1,30 +1,44 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="vi">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#f4f7f5">
-  <title>Test giấy tờ</title>
+  <title>Test giấy tờ · Grayscale v3 fine-tune</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="shell">
     <header class="topbar">
-      <h1>Test giấy tờ</h1>
-      <span id="modelStatus" class="status">Đang tải model</span>
+      <h1>Test giấy tờ · Grayscale v3 fine-tune</h1>
+      <span id="modelStatus" class="status">Đang tải model fine-tune</span>
     </header>
     <section class="card controls">
       <label class="upload"><span>Chọn ảnh</span><input id="singleInput" type="file" accept="image/*"></label>
       <label class="upload"><span>Chọn thư mục</span><input id="folderInput" type="file" accept="image/*" webkitdirectory multiple></label>
       <button id="runButton" class="primary" disabled>Chạy</button>
       <button id="exportButton" disabled>Xuất CSV</button>
-      <label class="gray-toggle"><input id="singleCccdGray" type="checkbox"> Ảnh đơn là CCCD · grayscale</label>
       <div class="progress-wrap"><div id="progressBar"></div></div>
       <div id="runStatus" class="run-status">Đang khởi tạo…</div>
     </section>
+    <section class="card camera-card">
+      <div class="section-head"><h2>Chụp giấy tờ</h2><span id="cameraStatus">Camera chưa bật</span></div>
+      <div class="camera-stage-wrap">
+        <div id="cameraStage" class="camera-stage" hidden>
+          <video id="cameraVideo" autoplay muted playsinline></video>
+          <div class="a4-guide" aria-hidden="true"><span>A4</span></div>
+        </div>
+        <div id="cameraPlaceholder" class="camera-placeholder">Bật camera để căn giấy vào khung A4</div>
+      </div>
+      <div class="camera-actions">
+        <button id="startCameraButton" type="button">Bật camera</button>
+        <button id="captureButton" class="primary" type="button" disabled>Chụp &amp; nhận dạng</button>
+        <button id="stopCameraButton" type="button" disabled>Tắt camera</button>
+      </div>
+    </section>
     <section class="card threshold-controls">
-      <label>Confidence tối thiểu <strong id="confidenceValue">60%</strong><input id="confidenceThreshold" type="range" min="0" max="1" step="0.01" value="0.60"></label>
-      <label>Cosine prototype tối thiểu <strong id="cosineValue">0.64</strong><input id="cosineThreshold" type="range" min="0" max="1" step="0.01" value="0.64"></label>
+      <label>Confidence tối thiểu <strong id="confidenceValue">39%</strong><input id="confidenceThreshold" type="range" min="0" max="1" step="0.01" value="0.39"></label>
+      <label>Cosine prototype tối thiểu <strong id="cosineValue">0.39</strong><input id="cosineThreshold" type="range" min="0" max="1" step="0.01" value="0.39"></label>
       <span id="thresholdNote">Từ chối nếu confidence hoặc cosine thấp hơn ngưỡng.</span>
     </section>
     <section id="summary" class="summary-grid" hidden></section>
@@ -33,7 +47,7 @@
       <div class="matrix-scroll"><table id="classMetricsTable"></table></div>
     </section>
     <section class="card result-card">
-      <div class="section-head"><h2>Kết quả từng ảnh</h2><span id="resultCount">Chưa có ảnh</span></div>
+      <div class="section-head"><h2>Kết quả từng ảnh</h2><div class="results-tools"><select id="resultFilter" aria-label="Lọc kết quả"><option value="all">Tất cả ảnh</option><option value="wrong">Nhận dạng sai</option><option value="correct">Nhận dạng đúng</option><option value="rejected">Bị từ chối</option></select><span id="resultCount">Chưa có ảnh</span></div></div>
       <div id="results" class="results-grid"><div class="empty">Chọn ảnh hoặc thư mục.</div></div>
     </section>
     <section id="matrixCard" class="card" hidden>
@@ -42,6 +56,6 @@
     </section>
   </main>
   <script src="vendor/ort.min.js"></script>
-  <script src="app.js?v=cccd-single-gray"></script>
+  <script src="app.js?v=gray-hbfit-v3-finetune-camera-threshold039"></script>
 </body>
 </html>

@@ -4,7 +4,7 @@
   const LABELS = ['Bằng tốt nghiệp','CCCD','ĐTUT','GXN kết quả thi','Học bạ 10','Học bạ 11','Học bạ 12','Học bạ bìa','VSAT'];
   const MEAN = [0.485,0.456,0.406], STD = [0.229,0.224,0.225];
   const $ = id => document.getElementById(id);
-  const state = {files:[], segmenter:null, classifier:null, prototypes:null, rows:[], urls:[], busy:false, modelLoadMs:0};
+  const state = {files:[], segmenter:null, classifier:null, prototypes:null, rows:[], urls:[], busy:false, modelLoadMs:0, resultsFilter:'all',cameraStream:null};
   const status = message => { $('runStatus').textContent=message; };
 
   async function init(){
@@ -29,13 +29,14 @@
       const prototypeResponse=await fetch('models/prototypes.json');
       if(!prototypeResponse.ok)throw new Error(`Không tải được models/prototypes.json (${prototypeResponse.status})`);
       state.prototypes=await prototypeResponse.json();
-      $('confidenceThreshold').value=state.prototypes.suggested_thresholds?.confidence??0.60;
-      $('cosineThreshold').value=state.prototypes.suggested_thresholds?.cosine??0.64;
+      $('confidenceThreshold').value=state.prototypes.suggested_thresholds?.confidence??0.39;
+      $('cosineThreshold').value=state.prototypes.suggested_thresholds?.cosine??0.39;
       updateThresholdLabels();
-      $('thresholdNote').textContent='Từ chối nếu confidence hoặc cosine dưới ngưỡng. Mốc gợi ý chỉ dựa trên ảnh giấy tờ validation, chưa hiệu chuẩn chó/mèo.';
+      $('thresholdNote').textContent='Mặc định confidence và cosine đều 0.39. Từ chối nếu một trong hai thấp hơn ngưỡng; hai ngưỡng có thể kéo chỉnh.';
       state.modelLoadMs=performance.now()-started;
       $('modelStatus').textContent=`Sẵn sàng · tải ${state.modelLoadMs.toFixed(0)} ms`;
       $('runButton').disabled=state.files.length===0;
+      $('captureButton').disabled=!state.cameraStream;
       status('Chọn ảnh hoặc thư mục.');
     }catch(error){$('modelStatus').textContent='Lỗi tải model';status(error.message||String(error));}
   }
@@ -48,10 +49,49 @@
     $('progressBar').style.width='0%';
   }
 
+  function resizeCameraStage(){
+    const video=$('cameraVideo'),stage=$('cameraStage');
+    if(!video.videoWidth||!video.videoHeight)return;
+    const ratio=video.videoWidth/video.videoHeight,availableWidth=stage.parentElement.clientWidth;
+    stage.style.aspectRatio=`${video.videoWidth}/${video.videoHeight}`;
+    stage.style.width=`${Math.min(availableWidth,window.innerHeight*0.68*ratio,1100)}px`;
+  }
+  async function startCamera(){
+    if(!navigator.mediaDevices?.getUserMedia){$('cameraStatus').textContent='Camera cần HTTPS hoặc localhost';return;}
+    $('startCameraButton').disabled=true;$('cameraStatus').textContent='Đang mở camera…';
+    try{
+      state.cameraStream=await navigator.mediaDevices.getUserMedia({audio:false,video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}}});
+      const video=$('cameraVideo');video.srcObject=state.cameraStream;
+      await new Promise((resolve,reject)=>{if(video.readyState>=1&&video.videoWidth)resolve();else{video.onloadedmetadata=resolve;video.onerror=()=>reject(new Error('Không đọc được luồng camera.'));}});
+      await video.play();resizeCameraStage();$('cameraStage').hidden=false;$('cameraPlaceholder').hidden=true;
+      $('captureButton').disabled=!state.segmenter;$('stopCameraButton').disabled=false;
+      $('cameraStatus').textContent=`Camera sẵn sàng · ${video.videoWidth} × ${video.videoHeight}`;
+    }catch(error){stopCamera();$('cameraStatus').textContent=error.name==='NotAllowedError'?'Chưa được cấp quyền camera':(error.message||'Không mở được camera');}
+    finally{$('startCameraButton').disabled=false;}
+  }
+  function stopCamera(){
+    if(state.cameraStream)for(const track of state.cameraStream.getTracks())track.stop();
+    state.cameraStream=null;$('cameraVideo').srcObject=null;$('cameraStage').hidden=true;$('cameraPlaceholder').hidden=false;
+    $('captureButton').disabled=true;$('stopCameraButton').disabled=true;$('cameraStatus').textContent='Camera chưa bật';
+  }
+  async function captureAndPredict(){
+    if(!state.cameraStream||state.busy)return;
+    const video=$('cameraVideo'),canvas=document.createElement('canvas');
+    const frameHeight=0.90,frameWidth=frameHeight*(210/297),sourceWidth=video.videoWidth*frameWidth,sourceHeight=video.videoHeight*frameHeight;
+    canvas.width=Math.round(sourceWidth);canvas.height=Math.round(sourceHeight);
+    const sx=(video.videoWidth-sourceWidth)/2,sy=(video.videoHeight-sourceHeight)/2;
+    canvas.getContext('2d').drawImage(video,sx,sy,sourceWidth,sourceHeight,0,0,canvas.width,canvas.height);
+    const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.94));
+    if(!blob){$('cameraStatus').textContent='Không chụp được ảnh';return;}
+    const file=new File([blob],`camera_${new Date().toISOString().replace(/[:.]/g,'-')}.jpg`,{type:'image/jpeg'});
+    setFiles([file]);$('singleInput').value='';$('folderInput').value='';
+    await run();
+  }
+
   const loadBitmap=file=>createImageBitmap(file,{imageOrientation:'from-image'});
   function letterboxCanvas(bitmap,size,sourceBox=null){
     const canvas=document.createElement('canvas');canvas.width=canvas.height=size;
-    const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';ctx.fillStyle='#fff';ctx.fillRect(0,0,size,size);
     let sx=0,sy=0,sw=bitmap.width,sh=bitmap.height;if(sourceBox)[sx,sy,sw,sh]=sourceBox;
     const scale=Math.min(size/sw,size/sh),width=Math.max(1,Math.round(sw*scale)),height=Math.max(1,Math.round(sh*scale));
     const left=Math.floor((size-width)/2),top=Math.floor((size-height)/2);
@@ -69,7 +109,10 @@
   }
   function grayscaleCanvas(source){
     const canvas=document.createElement('canvas');canvas.width=source.width;canvas.height=source.height;
-    const ctx=canvas.getContext('2d');ctx.filter='grayscale(1)';ctx.drawImage(source,0,0);ctx.filter='none';return canvas;
+    const ctx=canvas.getContext('2d',{willReadFrequently:true});ctx.drawImage(source,0,0);
+    const image=ctx.getImageData(0,0,canvas.width,canvas.height),data=image.data;
+    for(let i=0;i<data.length;i+=4){const value=Math.round((299*data[i]+587*data[i+1]+114*data[i+2])/1000);data[i]=value;data[i+1]=value;data[i+2]=value;}
+    ctx.putImageData(image,0,0);return canvas;
   }
   function findBox(maskData,bitmap,lb){
     const size=256*256,prob=new Float32Array(size),seen=new Uint8Array(size),queue=new Int32Array(size);
@@ -146,33 +189,17 @@
     const started=performance.now(),bitmap=await loadBitmap(file);
     try{
       const trueLabel=labelFromPath(file.webkitRelativePath||file.name);
-      const manualSingleCccd=!trueLabel&&state.files.length===1&&$('singleCccdGray').checked;
-      let cccdGrayPass=trueLabel==='cccd'||manualSingleCccd;
-      let cccdGrayReason=trueLabel==='cccd'?'ground_truth_label':manualSingleCccd?'manual_single_image':'';
-      let processedBitmap=cccdGrayPass?grayscaleCanvas(bitmap):bitmap;
-      let page=letterboxCanvas(processedBitmap,256);
-      let maskOut=await state.segmenter.run({page:tensorFromCanvas(page.canvas)});
-      let mask=maskOut.mask_logits.data,box=findBox(mask,bitmap,page);
-      let crop=letterboxCanvas(processedBitmap,224,[box.x,box.y,box.w,box.h]);
-      let classifierOut=await state.classifier.run({roi:tensorFromCanvas(crop.canvas)});
-      let logits=Array.from(classifierOut.class_logits.data),probabilities=softmax(logits);
-      let predicted=probabilities.indexOf(Math.max(...probabilities));
-      if(!trueLabel&&!manualSingleCccd&&CLASSES[predicted]==='cccd'&&!cccdGrayPass){
-        cccdGrayPass=true;
-        cccdGrayReason='predicted_cccd';
-        processedBitmap=grayscaleCanvas(bitmap);
-        page=letterboxCanvas(processedBitmap,256);
-        maskOut=await state.segmenter.run({page:tensorFromCanvas(page.canvas)});
-        mask=maskOut.mask_logits.data;box=findBox(mask,bitmap,page);
-        crop=letterboxCanvas(processedBitmap,224,[box.x,box.y,box.w,box.h]);
-        classifierOut=await state.classifier.run({roi:tensorFromCanvas(crop.canvas)});
-        logits=Array.from(classifierOut.class_logits.data);probabilities=softmax(logits);
-        predicted=probabilities.indexOf(Math.max(...probabilities));
-      }
+      const processedBitmap=grayscaleCanvas(bitmap),page=letterboxCanvas(processedBitmap,256);
+      const maskOut=await state.segmenter.run({page:tensorFromCanvas(page.canvas)});
+      const mask=maskOut.mask_logits.data,box=findBox(mask,bitmap,page);
+      const crop=letterboxCanvas(processedBitmap,224,[box.x,box.y,box.w,box.h]);
+      const classifierOut=await state.classifier.run({roi:tensorFromCanvas(crop.canvas)});
+      const logits=Array.from(classifierOut.class_logits.data),probabilities=softmax(logits);
+      const predicted=probabilities.indexOf(Math.max(...probabilities));
       const embedding=Array.from(classifierOut.embedding.data),cosines=prototypeCosines(embedding);
       const nearestPrototype=cosines.reduce((a,b)=>b.cosine>a.cosine?b:a,cosines[0]);
       const maskStats=tensorStats(mask);
-      return{file,name:file.webkitRelativePath||file.name,trueLabel,predicted:CLASSES[predicted],confidence:probabilities[predicted],probabilities,logits,embedding,cosines,nearestPrototype,cccdGrayPass,cccdGrayReason,maskLogits:Array.from(mask),maskStats,box,ms:performance.now()-started,overlay:overlayUrl(letterboxCanvas(processedBitmap,256).canvas,mask,box),maskImage:maskUrl(mask,box),roiImage:crop.canvas.toDataURL('image/jpeg',0.92),error:''};
+      return{file,name:file.webkitRelativePath||file.name,trueLabel,predicted:CLASSES[predicted],confidence:probabilities[predicted],probabilities,logits,embedding,cosines,nearestPrototype,grayscaleApplied:true,maskLogits:Array.from(mask),maskStats,box,ms:performance.now()-started,grayscaleImage:processedBitmap.toDataURL('image/jpeg',0.92),overlay:overlayUrl(page.canvas,mask,box),maskImage:maskUrl(mask,box),roiImage:crop.canvas.toDataURL('image/jpeg',0.92),error:''};
     }finally{bitmap.close();}
   }
   function labelFromPath(path){const parts=path.replaceAll('\\','/').split('/').map(x=>x.toLowerCase());for(let i=parts.length-1;i>=0;i--){const found=CLASSES.indexOf(parts[i]);if(found>=0)return CLASSES[found];}return'';}
@@ -186,20 +213,30 @@
   function addPreview(parent,title,src){const box=document.createElement('div');box.className='preview-block';const label=document.createElement('div');label.className='preview-title';label.textContent=title;const img=document.createElement('img');img.src=src;img.alt=title;box.append(label,img);parent.append(box);}
   function modelOutputPayload(row){
     applyDecision(row);
-    return{file:row.name,model_outputs:{roi_segmenter:{name:'mask_logits',shape:[1,1,256,256],statistics:row.maskStats,threshold:0.45,selection:'one 8-connected component with the highest mean sigmoid confidence among components of at least 12 pixels',active_pixels:row.box.activePixels,selected_component_pixels:row.box.componentPixels,selected_component_mean_confidence:row.box.meanConfidence,raw_values:row.maskLogits},roi_classifier:{name:'class_logits',shape:[1,9],classes:CLASSES.map((name,i)=>({id:i,name,logit:row.logits[i],softmax:row.probabilities[i]})),embedding:{name:'embedding',shape:[1,row.embedding.length],dimensions:row.embedding.length,raw_values:row.embedding},prototype_cosine:{metric:'cosine',scores:row.cosines,nearest:row.nearestPrototype}}},rejection:{accepted:row.accepted,reasons:row.rejectionReasons,thresholds:currentThresholds()},preprocessing:{cccd_grayscale_pass:row.cccdGrayPass,cccd_grayscale_reason:row.cccdGrayReason||null,true_label:row.trueLabel||null},roi_xywh_original:[row.box.x,row.box.y,row.box.w,row.box.h],inference_ms:row.ms};
+    return{file:row.name,model_outputs:{roi_segmenter:{name:'mask_logits',shape:[1,1,256,256],statistics:row.maskStats,threshold:0.45,selection:'one 8-connected component with the highest mean sigmoid confidence among components of at least 12 pixels',active_pixels:row.box.activePixels,selected_component_pixels:row.box.componentPixels,selected_component_mean_confidence:row.box.meanConfidence,raw_values:row.maskLogits},roi_classifier:{name:'class_logits',shape:[1,9],classes:CLASSES.map((name,i)=>({id:i,name,logit:row.logits[i],softmax:row.probabilities[i]})),embedding:{name:'embedding',shape:[1,row.embedding.length],dimensions:row.embedding.length,raw_values:row.embedding},prototype_cosine:{metric:'cosine',scores:row.cosines,nearest:row.nearestPrototype}}},rejection:{accepted:row.accepted,reasons:row.rejectionReasons,thresholds:currentThresholds()},preprocessing:{grayscale_applied_to_all_images:row.grayscaleApplied,true_label:row.trueLabel||null},roi_xywh_original:[row.box.x,row.box.y,row.box.w,row.box.h],inference_ms:row.ms};
   }
   function downloadTensor(row){
     const payload=modelOutputPayload(row);
     const blob=new Blob([JSON.stringify(payload)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`${row.file.name.replace(/\.[^.]+$/,'')}_onnx_output.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   function drawResults(){
-    $('resultCount').textContent=`${state.rows.length} ảnh đã chạy`;
+    state.rows.forEach(applyDecision);
+    const labelled=state.rows.filter(row=>row.trueLabel&&!row.error);
+    const wrong=labelled.filter(row=>row.predicted!==row.trueLabel).length;
+    const selected=state.rows.filter(row=>{
+      if(state.resultsFilter==='wrong')return row.trueLabel&&!row.error&&row.predicted!==row.trueLabel;
+      if(state.resultsFilter==='correct')return row.trueLabel&&!row.error&&row.predicted===row.trueLabel&&row.accepted;
+      if(state.resultsFilter==='rejected')return !row.error&&!row.accepted;
+      return true;
+    });
+    $('resultCount').textContent=`Hiện ${selected.length}/${state.rows.length} ảnh · sai ${wrong}`;
     for(const url of state.urls)URL.revokeObjectURL(url);state.urls=[];
     const container=$('results');container.replaceChildren();
-    for(const row of state.rows){
+    if(!selected.length){const empty=document.createElement('div');empty.className='empty';empty.textContent=state.rows.length?'Không có ảnh phù hợp với bộ lọc.':'Chọn ảnh hoặc thư mục.';container.append(empty);}
+    for(const row of selected){
       applyDecision(row);
       const card=document.createElement('article');card.className='item';if(!row.accepted&&!row.error)card.classList.add('refused');else if(row.trueLabel)card.classList.add(row.trueLabel===row.predicted?'correct':'wrong');
-      if(!row.error){const previews=document.createElement('div');previews.className='previews';addPreview(previews,'Ảnh + mask ROI',row.overlay);addPreview(previews,'Mask xác suất',row.maskImage);addPreview(previews,'ROI đưa vào classifier',row.roiImage);card.append(previews);}
+      if(!row.error){const previews=document.createElement('div');previews.className='previews';addPreview(previews,'Ảnh grayscale đưa vào model',row.grayscaleImage);addPreview(previews,'Ảnh + mask ROI',row.overlay);addPreview(previews,'Mask xác suất',row.maskImage);addPreview(previews,'ROI grayscale đưa vào classifier',row.roiImage);card.append(previews);}
       const details=document.createElement('div');details.className='details';
       const filename=document.createElement('div');filename.className='filename';filename.title=row.name;filename.textContent=row.name;
       const pred=document.createElement('div');pred.className='pred';pred.textContent=row.error?'Lỗi đọc ảnh':row.accepted?`${LABELS[CLASSES.indexOf(row.predicted)]} · ${pct(row.confidence)}`:`TỪ CHỐI · ${row.rejectionReasons.join(' · ')}`;
@@ -207,7 +244,7 @@
       if(row.trueLabel){const badge=document.createElement('span');badge.className='badge';badge.textContent=`Nhãn thật: ${LABELS[CLASSES.indexOf(row.trueLabel)]}`;details.append(badge);}
       if(row.error){const error=document.createElement('div');error.className='sub';error.textContent=row.error;details.append(error);}else{
         const stats=document.createElement('div');stats.className='tensor-stats';
-        stats.innerHTML=`<b>Ứng viên:</b> ${LABELS[CLASSES.indexOf(row.predicted)]} · confidence ${pct(row.confidence)}<br><b>Ngưỡng:</b> confidence ${pct(currentThresholds().confidence)} · cosine ${currentThresholds().cosine.toFixed(2)}<br><b>Mask output:</b> [1,1,256,256] · logit min ${fmt(row.maskStats.min)} · max ${fmt(row.maskStats.max)} · mean ${fmt(row.maskStats.mean)}<br><b>Mask ≥ 0.45:</b> ${row.box.activePixels} pixel · chọn 1 vùng liên thông confidence TB cao nhất: ${row.box.componentPixels} pixel, confidence TB ${pct(row.box.meanConfidence)}<br><b>ROI ảnh gốc (x,y,w,h):</b> ${row.box.x.toFixed(1)}, ${row.box.y.toFixed(1)}, ${row.box.w.toFixed(1)}, ${row.box.h.toFixed(1)}${row.box.fallback?' · không có vùng đạt ngưỡng, fallback toàn ảnh':''}<br><b>Đầu vào:</b> ${row.cccdGrayPass?`grayscale CCCD (${row.cccdGrayReason==='ground_truth_label'?'tự nhận theo thư mục nhãn':'bật thủ công cho ảnh đơn'})`:'RGB'}<br><b>Classifier output:</b> [1,9] logits + softmax<br><b>Embedding:</b> ${row.embedding.length} chiều · cosine gần nhất ${row.nearestPrototype.label}: ${row.nearestPrototype.cosine.toFixed(4)}<br><b>Quyết định:</b> ${row.accepted?'chấp nhận là một trong 9 lớp':'từ chối theo ngưỡng'}`;
+        stats.innerHTML=`<b>Ứng viên:</b> ${LABELS[CLASSES.indexOf(row.predicted)]} · confidence ${pct(row.confidence)}<br><b>Ngưỡng:</b> confidence ${pct(currentThresholds().confidence)} · cosine ${currentThresholds().cosine.toFixed(2)}<br><b>Mask output:</b> [1,1,256,256] · logit min ${fmt(row.maskStats.min)} · max ${fmt(row.maskStats.max)} · mean ${fmt(row.maskStats.mean)}<br><b>Mask ≥ 0.45:</b> ${row.box.activePixels} pixel · chọn 1 vùng liên thông confidence TB cao nhất: ${row.box.componentPixels} pixel, confidence TB ${pct(row.box.meanConfidence)}<br><b>ROI ảnh gốc (x,y,w,h):</b> ${row.box.x.toFixed(1)}, ${row.box.y.toFixed(1)}, ${row.box.w.toFixed(1)}, ${row.box.h.toFixed(1)}${row.box.fallback?' · không có vùng đạt ngưỡng, fallback toàn ảnh':''}<br><b>Đầu vào:</b> grayscale · áp dụng cho cả 9 nhãn<br><b>Classifier output:</b> [1,9] logits + softmax<br><b>Embedding:</b> ${row.embedding.length} chiều · cosine gần nhất ${row.nearestPrototype.label}: ${row.nearestPrototype.cosine.toFixed(4)}<br><b>Quyết định:</b> ${row.accepted?'chấp nhận là một trong 9 lớp':'từ chối theo ngưỡng'}`;
         details.append(stats,renderScores(row));const raw=document.createElement('details');raw.className='raw-output';const rawTitle=document.createElement('summary');rawTitle.textContent='Toàn bộ raw model output';const rawPre=document.createElement('pre');raw.append(rawTitle,rawPre);raw.addEventListener('toggle',()=>{if(raw.open&&!rawPre.textContent)rawPre.textContent=JSON.stringify(modelOutputPayload(row),null,2);});details.append(raw);const dl=document.createElement('button');dl.className='download-output';dl.textContent='Tải toàn bộ tensor output JSON';dl.addEventListener('click',()=>downloadTensor(row));details.append(dl);
       }
       card.append(details);container.append(card);
@@ -241,13 +278,13 @@
   }
   async function run(){
     if(state.busy||!state.files.length||!state.segmenter)return;
-    state.busy=true;$('runButton').disabled=true;$('exportButton').disabled=true;state.rows=[];$('results').replaceChildren();$('summary').hidden=$('matrixCard').hidden=$('classMetricsCard').hidden=true;
+    state.busy=true;$('runButton').disabled=true;$('captureButton').disabled=true;$('exportButton').disabled=true;state.rows=[];$('results').replaceChildren();$('summary').hidden=$('matrixCard').hidden=$('classMetricsCard').hidden=true;
     const files=state.files;let failed=0;
     try{for(let i=0;i<files.length;i++){
       status(`Đang chạy ${i+1}/${files.length}: ${files[i].name}`);
       try{state.rows.push(await predict(files[i]));}catch(error){failed++;state.rows.push({file:files[i],name:files[i].webkitRelativePath||files[i].name,error:error.message||String(error),ms:0,box:{fallback:true}});}
       $('progressBar').style.width=`${100*(i+1)/files.length}%`;if(i%3===0||i===files.length-1)drawResults();await new Promise(resolve=>setTimeout(resolve,0));
-    }drawResults();status(`Xong ${files.length} ảnh · lỗi ${failed}.`);}finally{state.busy=false;$('runButton').disabled=!state.segmenter||state.files.length===0;}
+    }drawResults();status(`Xong ${files.length} ảnh · lỗi ${failed}.`);}finally{state.busy=false;$('runButton').disabled=!state.segmenter||state.files.length===0;$('captureButton').disabled=!state.cameraStream||!state.segmenter;}
   }
   function exportCsv(){
     const cols=['file','true_label','candidate_label','accepted_as_document','rejection_reason','confidence','nearest_prototype','prototype_cosine','inference_ms','roi_x','roi_y','roi_width','roi_height','mask_min','mask_max','mask_mean','mask_active_pixels','error'],quote=x=>`"${String(x??'').replaceAll('"','""')}"`,lines=[cols.map(quote).join(',')];
@@ -255,6 +292,9 @@
     const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='roi_predictions.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   const thresholdsChanged=()=>{updateThresholdLabels();if(state.rows.length)drawResults();};
+  $('resultFilter').addEventListener('change',event=>{state.resultsFilter=event.target.value;drawResults();});
   $('confidenceThreshold').addEventListener('input',thresholdsChanged);$('cosineThreshold').addEventListener('input',thresholdsChanged);
-  $('singleInput').addEventListener('change',e=>setFiles(e.target.files));$('folderInput').addEventListener('change',e=>setFiles(e.target.files));$('runButton').addEventListener('click',run);$('exportButton').addEventListener('click',exportCsv);init();
+  $('singleInput').addEventListener('change',e=>setFiles(e.target.files));$('folderInput').addEventListener('change',e=>setFiles(e.target.files));$('runButton').addEventListener('click',run);$('exportButton').addEventListener('click',exportCsv);
+  $('startCameraButton').addEventListener('click',startCamera);$('captureButton').addEventListener('click',captureAndPredict);$('stopCameraButton').addEventListener('click',stopCamera);
+  window.addEventListener('resize',resizeCameraStage);window.addEventListener('pagehide',stopCamera);init();
 })();
