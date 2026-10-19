@@ -239,7 +239,7 @@
       if(!row.error){const previews=document.createElement('div');previews.className='previews';addPreview(previews,'Ảnh grayscale đưa vào model',row.grayscaleImage);addPreview(previews,'Ảnh + mask ROI',row.overlay);addPreview(previews,'Mask xác suất',row.maskImage);addPreview(previews,'ROI grayscale đưa vào classifier',row.roiImage);card.append(previews);}
       const details=document.createElement('div');details.className='details';
       const filename=document.createElement('div');filename.className='filename';filename.title=row.name;filename.textContent=row.name;
-      const pred=document.createElement('div');pred.className='pred';pred.textContent=row.error?'Lỗi đọc ảnh':row.accepted?`${LABELS[CLASSES.indexOf(row.predicted)]} · ${pct(row.confidence)}`:`TỪ CHỐI · ${row.rejectionReasons.join(' · ')}`;
+      const pred=document.createElement('div');pred.className='pred';pred.textContent=row.error?'Lỗi đọc ảnh':row.accepted?`${LABELS[CLASSES.indexOf(row.predicted)]} · ${pct(row.confidence)}`:`KHÔNG PHẢI GIẤY TỜ hoặc ẢNH MỜ · ${row.rejectionReasons.join(' · ')}`;
       details.append(filename,pred);
       if(row.trueLabel){const badge=document.createElement('span');badge.className='badge';badge.textContent=`Nhãn thật: ${LABELS[CLASSES.indexOf(row.trueLabel)]}`;details.append(badge);}
       if(row.error){const error=document.createElement('div');error.className='sub';error.textContent=row.error;details.append(error);}else{
