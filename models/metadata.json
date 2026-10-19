@@ -1,12 +1,12 @@
 {
   "architecture": "MobileNetV3-Small shared encoder + U-Net ROI segmentation + 9-class classification",
   "checkpoint": "best_model.pth (training artifact; not required by the static web app)",
-  "best_epoch": 15,
+  "best_epoch": 17,
   "classes": {
     "0": "bangtotnghiep",
     "1": "cccd",
     "2": "dtut",
-    "3": "gxn",
+    "3": "gxnkqthi",
     "4": "hocba10",
     "5": "hocba11",
     "6": "hocba12",
@@ -37,28 +37,28 @@
   "rejection": {
     "rule": "reject if top softmax confidence OR maximum prototype cosine is below its threshold",
     "suggested_thresholds": {
-      "confidence": 0.65,
+      "confidence": 0.6,
       "cosine": 0.64,
       "basis": "1st percentile validation confidence and 5th percentile validation prototype cosine; validation contains documents only"
     },
     "caveat": "Suggested values use document-only validation data; calibrate with non-document negatives before relying on unknown rejection."
   },
   "validation": {
-    "best_epoch": 15,
-    "epochs_completed": 23,
-    "elapsed_seconds": 1059.6,
+    "best_epoch": 17,
+    "epochs_completed": 25,
+    "elapsed_seconds": 1249.1,
     "device": "NVIDIA GeForce RTX 3070 Ti Laptop GPU",
     "parameters": 2285682,
-    "best_validation_score": 0.8995465484032266,
-    "test_count": 130,
-    "test_pipeline_accuracy": 0.9076923076923077,
-    "test_paired_roi_accuracy": 0.9846153846153847,
-    "test_mask_iou": 0.7648357428037204,
+    "best_validation_score": 0.9254361063017882,
+    "test_count": 133,
+    "test_pipeline_accuracy": 0.9398496240601504,
+    "test_paired_roi_accuracy": 1.0,
+    "test_mask_iou": 0.7809080898313594,
     "classes": [
       "bangtotnghiep",
       "cccd",
       "dtut",
-      "gxn",
+      "gxnkqthi",
       "hocba10",
       "hocba11",
       "hocba12",

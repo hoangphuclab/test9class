@@ -1,7 +1,7 @@
 ﻿(() => {
   'use strict';
-  const CLASSES = ['bangtotnghiep','cccd','dtut','gxn','hocba10','hocba11','hocba12','hocbabia','vsat'];
-  const LABELS = ['Bằng tốt nghiệp','CCCD','ĐTUT','GXN','Học bạ 10','Học bạ 11','Học bạ 12','Học bạ bìa','VSAT'];
+  const CLASSES = ['bangtotnghiep','cccd','dtut','gxnkqthi','hocba10','hocba11','hocba12','hocbabia','vsat'];
+  const LABELS = ['Bằng tốt nghiệp','CCCD','ĐTUT','GXN kết quả thi','Học bạ 10','Học bạ 11','Học bạ 12','Học bạ bìa','VSAT'];
   const MEAN = [0.485,0.456,0.406], STD = [0.229,0.224,0.225];
   const $ = id => document.getElementById(id);
   const state = {files:[], segmenter:null, classifier:null, prototypes:null, rows:[], urls:[], busy:false, modelLoadMs:0};
@@ -29,7 +29,7 @@
       const prototypeResponse=await fetch('models/prototypes.json');
       if(!prototypeResponse.ok)throw new Error(`Không tải được models/prototypes.json (${prototypeResponse.status})`);
       state.prototypes=await prototypeResponse.json();
-      $('confidenceThreshold').value=state.prototypes.suggested_thresholds?.confidence??0.65;
+      $('confidenceThreshold').value=state.prototypes.suggested_thresholds?.confidence??0.60;
       $('cosineThreshold').value=state.prototypes.suggested_thresholds?.cosine??0.64;
       updateThresholdLabels();
       $('thresholdNote').textContent='Từ chối nếu confidence hoặc cosine dưới ngưỡng. Mốc gợi ý chỉ dựa trên ảnh giấy tờ validation, chưa hiệu chuẩn chó/mèo.';

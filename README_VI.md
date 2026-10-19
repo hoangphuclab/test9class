@@ -12,7 +12,7 @@
 - Select one image or a folder, then run prediction.
 - Adjust **Confidence tối thiểu** and **Cosine prototype tối thiểu** on the page. The result changes immediately when either threshold moves.
 - An image is accepted only if both scores meet their thresholds. Otherwise it is marked **TỪ CHỐI** and counted in the reject column of the confusion matrix.
-- Starting thresholds are confidence `0.65` and cosine `0.64`, derived from low percentiles of validation document images. They are editable starting points, not calibrated dog/cat rejection limits.
+- Starting thresholds are confidence `0.60` and cosine `0.64`, derived from low percentiles of validation document images. They are editable starting points, not calibrated dog/cat rejection limits.
 - Folder names matching a class are used as labels for accuracy and the confusion matrix.
 - The JSON output includes raw mask logits, classifier logits, the 576D embedding, per-class cosine scores, thresholds, and the accept/reject decision. CSV includes candidate, decision, confidence, and nearest prototype.
 
@@ -34,9 +34,11 @@ The current training data contains only the nine document classes, with no dog/c
 
 ## Training snapshot
 
-- Dataset: 872 cleaned original/crop pairs; split 70/15/15 by class, grouped by source-image hash.
-- Best checkpoint: epoch 15, MobileNetV3-Small + U-Net, 2,285,682 parameters.
-- Test set: 130 images; pipeline accuracy 90.77%, paired-crop accuracy 98.46%, mask IoU 76.48%.
+- Dataset: 892 original/ROI pairs across 9 classes; split 70/15/15 by class, grouped by source-image hash (626 train, 133 validation, 133 test).
+- Class order: `bangtotnghiep`, `cccd`, `dtut`, `gxnkqthi`, `hocba10`, `hocba11`, `hocba12`, `hocbabia`, `vsat`.
+- Best checkpoint: epoch 17, MobileNetV3-Small + U-Net, 2,285,682 parameters.
+- Test set: 133 images; pipeline accuracy 93.98%, paired-crop accuracy 100%, mask IoU 78.09%.
+- CCCD images are converted to grayscale in all three splits. The reported offline pipeline metrics select this preprocessing using the known test label; the browser instead makes an RGB prediction first and reruns in grayscale when it predicts CCCD.
 - Full training curves, per-class metrics, confusion matrices, predictions, and embedding/cosine analysis are in `reports/`.
 
 The web app runs ONNX Runtime Web and WebAssembly locally in the browser. It does not send selected images to a server and does not require Python for deployment.
