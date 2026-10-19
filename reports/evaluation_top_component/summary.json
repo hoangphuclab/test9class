@@ -1,0 +1,38 @@
+{
+  "checkpoint": "D:\\ProjectKHMT\\modelhocba\\runs\\roi_all_classes_gxnkqthi_gray_cccd\\best_model.pth",
+  "best_epoch": 17,
+  "device": "cuda",
+  "mask_threshold": 0.45,
+  "minimum_component_pixels": 12,
+  "connectivity": 8,
+  "selection": "highest mean sigmoid confidence",
+  "classes": [
+    "bangtotnghiep",
+    "cccd",
+    "dtut",
+    "gxnkqthi",
+    "hocba10",
+    "hocba11",
+    "hocba12",
+    "hocbabia",
+    "vsat"
+  ],
+  "splits": {
+    "val": {
+      "count": 133,
+      "classification_loss": 0.26281384148992093,
+      "segmentation_loss": 0.17973657803876059,
+      "paired_roi_accuracy": 0.924812030075188,
+      "pipeline_accuracy": 0.9624060150375939,
+      "mask_iou": 0.7606575381486935
+    },
+    "test": {
+      "count": 133,
+      "classification_loss": 0.1654411875887921,
+      "segmentation_loss": 0.15502731244366869,
+      "paired_roi_accuracy": 0.9473684210526315,
+      "pipeline_accuracy": 0.9398496240601504,
+      "mask_iou": 0.7809287981879443
+    }
+  }
+}

@@ -16,7 +16,7 @@
   "preprocessing": {
     "page": "RGB ImageNet-normalized, letterbox 256x256",
     "roi": "RGB ImageNet-normalized, letterbox 224x224",
-    "cccd": "When preliminary RGB classification predicts CCCD, rerun segmentation/classification with grayscale page and ROI replicated to RGB tensor; no thresholding."
+      "cccd": "For folder samples with true-label path cccd, run segmentation/classification from grayscale page and ROI replicated to RGB tensor. For an unlabeled single image, a manual grayscale option is available; otherwise rerun in grayscale if the preliminary RGB prediction is CCCD. No thresholding."
   },
   "outputs": {
     "segmenter": {

@@ -18,6 +18,7 @@
       <label class="upload"><span>Chọn thư mục</span><input id="folderInput" type="file" accept="image/*" webkitdirectory multiple></label>
       <button id="runButton" class="primary" disabled>Chạy</button>
       <button id="exportButton" disabled>Xuất CSV</button>
+      <label class="gray-toggle"><input id="singleCccdGray" type="checkbox"> Ảnh đơn là CCCD · grayscale</label>
       <div class="progress-wrap"><div id="progressBar"></div></div>
       <div id="runStatus" class="run-status">Đang khởi tạo…</div>
     </section>
@@ -41,6 +42,6 @@
     </section>
   </main>
   <script src="vendor/ort.min.js"></script>
-  <script src="app.js"></script>
+  <script src="app.js?v=cccd-single-gray"></script>
 </body>
 </html>
